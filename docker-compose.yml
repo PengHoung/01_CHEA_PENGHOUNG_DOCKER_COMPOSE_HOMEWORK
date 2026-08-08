@@ -1,0 +1,89 @@
+services:
+  postgres-db:
+    image: postgres:18-alpine
+    container_name: postgres-db
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: my_database
+      POSTGRES_USER: my_user
+      POSTGRES_PASSWORD: my_secure_password
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U my_user -d my_database"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  spring-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: spring-app
+    ports:
+      - "8081:8080"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-db:5432/my_database
+      - SPRING_DATASOURCE_USERNAME=my_user
+      - SPRING_DATASOURCE_PASSWORD=my_secure_password
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+
+  keycloak-db:
+    image: postgres:18-alpine
+    container_name: keycloak-postgres-db
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: keycloak_password
+    volumes:
+      - pgdata:/var/lib/postgressql
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U my_user -d my_database" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - blah
+
+  keycloak-admin:
+    image: keycloak/keycloak:26.7
+    container_name: keycloak-admin
+    command: start-dev
+    environment:
+        KC_DB: postgres
+        KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
+        KC_DB_USERNAME: keycloak
+        KC_DB_PASSWORD: keycloak_password
+        KEYCLOAK_ADMIN: admin
+        KEYCLOAK_ADMIN_PASSWORD: admin
+    ports:
+        - "8080:8080"
+        - "8443:8443"
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    networks:
+      - blah
+
+  rabbitmq:
+    image: rabbitmq:4.3.4-management-alpine
+    container_name: rabbitmq-broker
+    ports:
+      - "15672:15672"
+
+  rustfs:
+    image: rustfs/rustfs:latest
+    container_name: rustfs-st
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+
+volumes:
+  pgdata:
+
+networks:
+  blah:
+    driver: bridge
